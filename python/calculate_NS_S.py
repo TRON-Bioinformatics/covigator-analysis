@@ -5,6 +5,9 @@ from typing import Tuple
 import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
+from Bio.codonalign.codonseq import *
+from Bio.codonalign import codonseq
+from Bio.Data import CodonTable
 
 
 def calculate_ns_s(sequence: Seq) -> Tuple[int, int]:
@@ -41,6 +44,15 @@ def calculate_ns_s(sequence: Seq) -> Tuple[int, int]:
     return ns, s
 
 
+def calculate_ns_s_2(sequence: Seq) -> Tuple[int, int]:
+    codon_sequence = CodonSeq(str(sequence))
+    s, ns = codonseq._count_site_NG86(
+        codon_lst=codonseq._get_codon_list(codon_sequence)[0:-1],
+        codon_table=CodonTable.standard_dna_table
+    )
+    return ns, s
+
+
 # calculates NS and S over genes in SARS-CoV-2
 def calculate_ns_s_over_genes():
     data = {"transcript": [], "gene": [], "NS": [], "S": []}
@@ -48,14 +60,14 @@ def calculate_ns_s_over_genes():
         for record in SeqIO.parse(handle, "fasta"):
             transcript = re.sub("\\..*", "", record.id)
             gene = re.compile(r'.*gene_symbol:(\w+)').match(record.description).group(1)
-            ns, s = calculate_ns_s(sequence=record.seq)
+            ns, s = calculate_ns_s_2(sequence=record.seq)
             data.get("transcript").append(transcript)
             data.get("gene").append(gene)
             data.get("NS").append(ns)
             data.get("S").append(s)
 
     df = pd.DataFrame(data=data)
-    df.to_csv("../references/genes_NS_S.csv", index=False)
+    df.to_csv("../references/genes_NS_S_2.csv", index=False)
 
 
 calculate_ns_s_over_genes()
@@ -88,13 +100,13 @@ def calculate_ns_s_over_domains():
             # convert here 1-based protein coordinate to 0-based DNA coordinates
             start = (int(d.get('start')) - 1) * 3
             end = (int(d.get('end')) - 1) * 3
-            ns, s = calculate_ns_s(transcript_sequence[start:end])
+            ns, s = calculate_ns_s_2(transcript_sequence[start:end])
             domains.get("NS").append(ns)
             domains.get("S").append(s)
             domains.get("start").append(start)
             domains.get("end").append(end)
     df = pd.DataFrame(data=domains)
-    df.to_csv("../references/domains_NS_S.csv", index=False)
+    df.to_csv("../references/domains_NS_S_2.csv", index=False)
 
 
 calculate_ns_s_over_domains()
