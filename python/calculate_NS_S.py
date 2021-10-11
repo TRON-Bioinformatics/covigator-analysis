@@ -78,7 +78,7 @@ def calculate_ns_s_over_genes():
             data.get("S").append(s)
 
     df = pd.DataFrame(data=data)
-    df.to_csv("../references/genes_NS_S.csv", index=False)
+    df.to_csv("../data/genes_NS_S.csv", index=False)
 
 
 calculate_ns_s_over_genes()
@@ -117,7 +117,7 @@ def calculate_ns_s_over_domains():
             domains.get("start").append(start)
             domains.get("end").append(end)
     df = pd.DataFrame(data=domains)
-    df.to_csv("../references/domains_NS_S.csv", index=False)
+    df.to_csv("../data/domains_NS_S.csv", index=False)
 
 
 calculate_ns_s_over_domains()
