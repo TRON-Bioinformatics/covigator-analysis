@@ -1,0 +1,100 @@
+---
+title: "CoVigator raw data loading"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## CoVigator data loading
+
+This markdown intends to show how to load and join the raw CoVigator data.
+
+
+```{r}
+data_folder = "/scratch/info/projects/covigator/data/db_dump_20211102"
+```
+
+### Samples metadata
+
+The metadata for samples are in two tables: samples and jobs. Samples contains the metadata as is from the source, and jobs contain mostly the execution metadata. Also, we have each of these tables for ENA and GISAID. The unique identifier in all these four tables is "run_accession".
+
+```{r}
+sample_ena = read.csv(paste(data_folder, "sample_ena.csv.gz", sep="/"))
+head(sample_ena)
+```
+
+```{r}
+job_ena = read.csv(paste(data_folder, "job_ena.csv.gz", sep="/"))
+head(job_ena)
+```
+
+Samples and jobs can be merged by "run_accession"
+
+```{r}
+sample_and_job_ena = merge(sample_ena, job_ena, by="run_accession")
+```
+
+```{r}
+summary(subset(sample_and_job_ena, select = -c("fastq_ftp", "fastq_md5", "error_message", "fastq_path", "vcf_path", "fastp_path") ))
+```
+
+
+The same approach works for GISAID
+
+```{r}
+sample_gisaid = read.csv(paste(data_folder, "sample_gisaid.csv.gz", sep="/"))
+job_gisaid = read.csv(paste(data_folder, "job_gisaid.csv.gz", sep="/"))
+sample_and_job_gisaid = merge(sample_gisaid, job_gisaid, by="run_accession")
+```
+
+
+### Mutations
+
+The mutations are stored in a table of unique mutations.
+
+```{r}
+variant = read.csv(paste(data_folder, "variant.csv.gz", sep="/"))
+head(variant)
+```
+
+
+```{r}
+summary(variant)
+```
+
+
+The mutations observed in every sample are also stored by their VAF in two tables. A table with those variant observations with a VAF >= 0.8 and 
+a second table with the variant observations with a VAF < 0.8. Many of the annotations in the unique mutations tabke are already duplicated in the observations table
+
+```{r}
+variant_observation = read.csv(paste(data_folder, "variant_observation.csv.gz", sep="/"))
+head(variant_observation)
+```
+
+
+```{r}
+subclonal_variant_observation = read.csv(paste(data_folder, "subclonal_variant_observation.csv.gz", sep="/"))
+head(subclonal_variant_observation)
+```
+
+
+### Other annotations
+
+There are other tables that may be useful. Genes, domains, conservation scores and some precomputed values.
+
+```{r}
+genes = read.csv(paste(data_folder, "gene.csv.gz", sep="/"))
+genes
+```
+
+```{r}
+domains = read.csv(paste(data_folder, "domain.csv.gz", sep="/"))
+domains
+```
+
+```{r}
+conservation_scores = read.csv(paste(data_folder, "conservation.csv.gz", sep="/"))
+head(conservation_scores)
+```
