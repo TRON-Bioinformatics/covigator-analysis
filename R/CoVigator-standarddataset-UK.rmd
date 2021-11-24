@@ -1,0 +1,376 @@
+---
+title: "CoVigator analysis - November 2021"
+author: "TRON/Ranganath Gudimella"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(plyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ggpubr)
+library(knitr)
+library(kableExtra)
+library(readr)
+library(jsonlite)
+#library(ComplexHeatmap)
+library(RColorBrewer)
+
+# https://statisticsglobe.com/create-distinct-color-palette-in-r
+palette3_info <- brewer.pal.info[brewer.pal.info$category == "qual", ] %>% filter(colorblind = TRUE) # Extract color info
+palette3_all <- unlist(mapply(brewer.pal,                     # Create vector with all colors
+                              palette3_info$maxcolors,
+                              rownames(palette3_info)))           
+set.seed(123)                                             # Set random seed
+my_palette <- sample(palette3_all, 13)                    # Sample colors
+   
+
+## Read Json files
+path.dat <- "/scratch/info/projects/SARS-CoV-2/lineages/constellations/constellations/definitions/"
+json_files <- list.files(path.dat,pattern = "*.json")
+
+lineage_json <- lapply(paste(path.dat,json_files,sep=""), function(x) {
+  tryCatch(fromJSON(x,simplifyDataFrame = FALSE) , error=function(e) NULL)
+})
+
+lineage_json_df <- lapply(lineage_json,function(i){data.frame(label = i[1],lineage = i[[5]][1],variants = as.character(i[7]),deletions = as.character(i[8]))}) %>% ldply(.,data.frame) %>% 
+mutate(snps = strsplit(as.character(variants), ",")) %>% 
+tidyr::unnest_longer(snps) %>% 
+mutate(snps = str_remove_all(snps,'\\"'),
+         snps = str_remove_all(snps,'c'),
+         snps = str_remove_all(snps,'\\)'),
+         snps = str_remove_all(snps,'\\(')) %>% 
+select(label,Pango_lineages,snps) %>%
+mutate(gene_name = str_extract(snps,"\\S+\\:"), 
+       gene_name = str_remove_all(gene_name,"\\:"),
+       snps = str_remove_all(snps,"\\S+\\:"),
+       snps =  str_remove_all(snps,"\\s+")) %>%
+filter(gene_name %in% c("S","s","spike"))
+
+```
+
+## Background
+
+Agenda of the analysis is to identify gold standard dataset present in both ENA and GISAID dataset. So the mutation calls can be validated with the sequencing data.
+
+## ENA dataset from COG-UK
+
+ENA samples from CoVigator from Bioproject accession PRJEB37886 are selected for this analysis.
+
+```{r coguk-data,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE}
+
+
+ena_dat <- read_csv("/scratch/info/projects/covigator/data/db_dump_20211102/sample_ena.csv.gz") 
+              
+kable(ena_dat %>% group_by(study_accession,country,center_name) %>% summarise(noofsamples=n()) %>% arrange(desc(as.numeric(noofsamples))) %>% filter(study_accession %in% "PRJEB37886"),format = "html",align = 'c') %>% kable_styling(bootstrap_options = 'striped', full_width = F) %>% scroll_box(width = "100%", height = "550px")
+
+```
+
+## Samples from ENA & GISAID
+
+Top 20 of matching ENA and GISAID samples are listed in the table
+
+```{r c1,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=2,fig.width=10}
+
+coguk_dat <- read_tsv("/scratch/info/projects/SARS-CoV-2/filereport_read_run_PRJEB37886_tsv.txt") 
+
+gisaid_dat <- read_csv("/scratch/info/projects/covigator/data/db_dump_20211102/sample_gisaid.csv.gz") %>% filter(country %in% c("United Kingdom")) %>% tidyr::separate(run_accession, c("hcov", "country", "id","year"), sep = "/")
+
+coguk_ena_dat <- ena_dat %>% filter(study_accession %in% c("PRJEB37886")) %>% select(run_accession,read_count,base_count) %>% left_join(.,coguk_dat,c("run_accession")) %>% select(run_accession,read_count,base_count,sample_alias) %>% mutate(sample_id = str_extract(sample_alias,"(\\/\\S+)"),sample_id = str_remove(sample_id,"\\/")) %>% 
+left_join(.,gisaid_dat,c("sample_id"="id")) %>% tidyr::drop_na(hcov) %>% select(1:9,20,21,22) %>%
+mutate(sample=paste(hcov,country,sample_id,year,sep = "/"))
+
+#write_csv2(coguk_ena_dat,"coguk-ena-gisaid-samples.csv")
+
+
+print(paste("Number of samples common in ENA and GISAID are",nrow(coguk_ena_dat),sep = " "))
+print("COG UK samples common in ENA and GISAID is available here: /scratch/info/projects/covigator/data/standard_dataset/coguk-ena-gisaid-samples.csv")
+
+              
+kable(coguk_ena_dat %>% slice_head(n=20) %>% select(sample_id,run_accession,sample),format = "html",align = 'c') %>% kable_styling(bootstrap_options = 'striped', full_width = F) %>% scroll_box(width = "100%", height = "550px")
+
+
+```
+
+## Variants from same samples ENA & GISAID
+
+Variants from ENA and GISAID COG-UK samples are merged by sample_id and variant_id
+
+### Samples with overlapping variants
+
+-   Samples from COG-UK are separated based on variant calls i.e. Samples with **overlapping_variants** are called both in GISAID and ENA, Samples with **non-overlapping_variants** are variant calls in both GISAID and ENA but no overlaps/common variants, **variants_only_GISAID** are samples with variant calls only in GISAID and **variants_only_ENA** are samples with variant calls only in ENA.
+
+-   Plot shows the distribution of samples across above categories
+
+```{r c2,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=2,fig.width=10}
+
+ena_variant_obs <- read_csv("/scratch/info/projects/covigator/data/db_dump_20211102/variant_observation.csv.gz",col_select = c("source","sample","variant_id","gene_name","hgvs_p","variant_type","date","position_amino_acid","quality","dp","vaf"),col_types = c("c","c","c","c","c","c","c","c","i","i","i")) %>% right_join(.,coguk_ena_dat,c("sample"="run_accession")) %>% select(1:8,quality,dp,vaf,sample_id)
+
+
+gisaid_variant_obs <- read_csv("/scratch/info/projects/covigator/data/db_dump_20211102/variant_observation.csv.gz",col_select = c("source","sample","variant_id","gene_name","hgvs_p","variant_type","date","position_amino_acid","quality","dp","vaf"),col_types = c("c","c","c","c","c","c","c","c","i","i","i")) %>% right_join(.,coguk_ena_dat,c("sample"="sample")) %>% select(1:8,quality,dp,vaf,sample_id)
+
+merge_sample_obs <- full_join(ena_variant_obs[,c(1,3:7,10:12)],gisaid_variant_obs[,c(1,3:7,12)],c("variant_id","sample_id","variant_type")) %>% filter(!is.na(variant_id)) %>% 
+mutate(venn=ifelse(is.na(source.x),"uniquetoGISAID",ifelse(is.na(source.y),"uniquetoENA","common"))) %>%
+rename("gene_name_ena" = "gene_name.x","gene_name_gisaid" = "gene_name.y","hgvs_p_ena" = "hgvs_p.x","hgvs_p_gisaid" = "hgvs_p.y","date_ena"="date.x.x","date_gisaid"="date.x.y")
+
+
+sample_dist_var <- merge_sample_obs %>% select(sample_id,venn) %>% 
+  group_by(sample_id,venn) %>% 
+  summarise(noofvariants=n()) %>% 
+  reshape2::dcast(.,sample_id ~ venn,value.var = "noofvariants") %>% 
+  mutate(venn_sample =
+           ifelse(is.na(common) & is.na(uniquetoENA),"variants_only_GISAID",
+           ifelse(is.na(common) & is.na(uniquetoGISAID),"variants_only_ENA",
+           ifelse(is.na(common),"non_overlapping_variants","overlapping_variants")))) 
+  
+
+sample_dist_var %>% group_by(venn_sample) %>% summarise(noofsamples=n()) %>% reshape2::melt() %>%
+ggplot(aes(x= venn_sample,y=value,fill=venn_sample,label=paste(round(value,digits = 2),sep = ""))) +
+  geom_bar(position = "stack", stat="identity") +
+  geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+  labs(title = "", x = "Sample ID", y = "No. of COG-UK samples") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_classic() +
+  coord_flip()
+
+```
+
+### Variant calls from CoVigator
+
+Only samples with overlapping variants are considered, below plot shows the variants calls commonly and uniquely for GISAID and ENA samples by CoVigator.
+
+```{r c3,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=2,fig.width=10}
+
+common_samples <- filter(sample_dist_var,venn_sample %in% c("overlapping_variants"))
+
+print(paste("Number of samples with overlapping variants are",nrow(common_samples),sep=" "))
+       
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% group_by(venn) %>% summarise(noofvariants=n()) %>% reshape2::melt() %>%
+  ggplot(aes(x= venn,y=value,fill=venn,label=paste(round(value,digits = 2),sep = ""))) +
+  geom_bar(position = "stack", stat="identity") +
+  geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+  labs(title = "", x = "Sample ID", y = "No. of variants") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_classic() +
+  coord_flip()
+
+
+
+
+```
+
+### Distribution of Variant types from GISAID and ENA
+
+Different variant types are shown in below plot, observed large number of deletions in GISAID samples and further explored.
+
+```{r c4,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=2,fig.width=10}
+
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% group_by(variant_type,venn) %>% summarise(noofvariants=n()) %>% reshape2::melt() %>%
+  ggplot(aes(x= variant_type,y=value,fill=variant_type,label=paste(round(value,digits = 2),sep = ""))) +
+  geom_bar(position = "stack", stat="identity") +
+  geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+  labs(title = "", x = "Sample ID", y = "No. of variants") +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_wrap(~venn,scales = "free") +
+  theme_classic() 
+
+
+
+
+```
+
+#### Recurring deletions on the ends of genome assemblies
+
+Deletion occurring above 29000 nucleotide in genome assemblies are primers or artifacts seen in most of samples
+
+```{r c6,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=10}
+
+merge_sample_obs %>% 
+filter(sample_id %in% c(common_samples$sample_id), venn %in% c("uniquetoGISAID"),is.na(gene_name_gisaid),variant_type %in% c("DELETION")) %>% 
+select(variant_id,sample_id) %>%
+group_by(variant_id) %>% 
+summarise(noofsamples=n()) %>% arrange(desc(noofsamples)) %>% slice_head(n=20) %>%
+kable(format = "html",align = 'c') %>% kable_styling(bootstrap_options = 'striped', full_width = F) %>% scroll_box(width = "100%", height = "550px")
+
+```
+
+### Distribution of variant types among coding and non-coding regions - Unique to GISAID
+
+```{r c51,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=10}
+
+merge_sample_obs %>% 
+filter(sample_id %in% c(common_samples$sample_id), venn %in% c("uniquetoGISAID")) %>% 
+group_by(variant_type,gene_name_gisaid) %>% 
+summarise(noofvariants=n()) %>% 
+mutate(gene_name = ifelse(is.na(gene_name_gisaid),"non_coding_region",gene_name_gisaid)) %>%
+arrange(gene_name) %>%
+ggbarplot("gene_name","noofvariants",
+          color = "variant_type",
+          fill="variant_type",
+          palette = "Paired",
+          label = TRUE,
+          position = position_dodge(0.9)) +
+  theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+### Distribution of variant types among coding and non-coding regions - Unique to ENA
+
+```{r c52,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=10}
+
+merge_sample_obs %>% 
+filter(sample_id %in% c(common_samples$sample_id), venn %in% c("uniquetoENA")) %>% 
+group_by(variant_type,gene_name_ena) %>% 
+summarise(noofvariants=n()) %>% 
+mutate(gene_name = ifelse(is.na(gene_name_ena),"non_coding_region",gene_name_ena)) %>%
+arrange(gene_name) %>%
+ggbarplot("gene_name","noofvariants",
+          color = "variant_type",
+          fill="variant_type",
+          palette = "Paired",
+          label = TRUE,
+          position = position_dodge(0.9)) +
+  theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+### Distribution of variant types among coding and non-coding regions - Common
+
+```{r c53,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=10}
+
+merge_sample_obs %>% 
+filter(sample_id %in% c(common_samples$sample_id), venn %in% c("common")) %>% 
+group_by(variant_type,gene_name_ena) %>% 
+summarise(noofvariants=n()) %>% 
+mutate(gene_name = ifelse(is.na(gene_name_ena),"non_coding_region",gene_name_ena)) %>%
+arrange(gene_name) %>%
+ggbarplot("gene_name","noofvariants",
+          color = "variant_type",
+          fill="variant_type",
+          palette = "Paired",
+          label = TRUE,
+          position = position_dodge(0.9)) +
+  theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+### VAF distribution across different variant types
+
+Variant allele frequency of all the variants show above 0.8, which is ideal cutoff considered by CoVigator pipeline for variant calling.
+
+```{r c7,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=4,fig.width=10}
+
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% select(variant_type,venn,vaf)  %>%
+ggboxplot("variant_type","vaf",color = "variant_type",fill="variant_type",palette = "Set3", shape="variant_type") +
+  facet_wrap(~venn,scales = "free")
+
+```
+
+## Temporal distribution of COG-UK samples
+
+Only shows the temporal distribution of selected samples i.e. 11,374. Most of samples submitted to GISAID are post dated in ENA.
+
+```{r c8,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=10}
+
+dist_gisaid <- merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% select(sample_id,date_gisaid,source.y) %>% distinct() %>% mutate(month=str_extract(date_gisaid,"(\\d{4}\\-\\d{2})"))  %>% group_by(month,source.y) %>% summarise(noofsamples=n()) %>% tidyr::drop_na() %>% rename("source"="source.y")
+
+dist_ena <- merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% select(sample_id,date_ena,source.x) %>% distinct() %>% mutate(month=str_extract(date_ena,"(\\d{4}\\-\\d{2})"))  %>% group_by(month,source.x) %>% summarise(noofsamples=n()) %>% tidyr::drop_na() %>% rename("source"="source.x")
+
+bind_rows(dist_gisaid,dist_ena) %>% 
+ggline( x = "month", y = "noofsamples",label = TRUE , color="source",palette = "grey") +
+  theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+### Temporal distribution of variants across SARS-CoV-2 genes - GISAID
+
+```{r c10,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=10}
+
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% select(date_gisaid,variant_id,gene_name_gisaid) %>% mutate(month=str_extract(date_gisaid,"(\\d{4}\\-\\d{2})"))  %>% group_by(month,gene_name_gisaid) %>% summarise(noofvariants=n()) %>% tidyr::drop_na() %>%
+ggline( x = "month", y = "noofvariants",color="gene_name_gisaid",label = TRUE ,add = "mean_se", palette = "my_palette") +
+    theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+### Temporal Distribution of Spike protien variants - GISAID
+
+```{r c12,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=6,fig.width=12}
+
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% 
+  select(date_gisaid,hgvs_p_gisaid,gene_name_gisaid) %>% 
+  filter(gene_name_gisaid %in% "S") %>% 
+  mutate(month=str_extract(date_gisaid,"(\\d{4}\\-\\d{2})"), aa_pos = as.numeric(str_extract(hgvs_p_gisaid,"\\d+")), hgvs_p_gisaid = str_remove(hgvs_p_gisaid,"p."))   %>% 
+  group_by(hgvs_p_gisaid,month) %>% 
+  summarise(noofsamples=n()) %>% 
+  tidyr::drop_na() %>%
+  arrange(month)  %>% 
+ ggboxplot("month", "noofsamples",
+    color = "month", palette ="my_palette",label = "hgvs_p_gisaid",
+    add = "jitter", shape = "month",label.select = list(top.up = 3),repel = TRUE) +
+  scale_shape_manual(values=c(sample(25,size = 16)))
+
+```
+
+
+### RBD variants - GISAID
+
+```{r c13,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=10,fig.width=12}
+
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% 
+  select(date_gisaid,hgvs_p_gisaid,gene_name_gisaid) %>% 
+  filter(gene_name_gisaid %in% "S") %>% 
+  mutate(month=str_extract(date_gisaid,"(\\d{4}\\-\\d{2})"), aa_pos = as.numeric(str_extract(hgvs_p_gisaid,"\\d+")), hgvs_p_gisaid = str_remove(hgvs_p_gisaid,"p."))   %>% 
+  filter(aa_pos >= 319 & aa_pos <= 529) %>%
+  group_by(hgvs_p_gisaid,month) %>% 
+  summarise(noofsamples=n()) %>% 
+  tidyr::drop_na() %>%
+  arrange(month)  %>% 
+  left_join(.,lineage_json_df,c("hgvs_p_gisaid"="snps")) %>%
+  filter(!is.na(label)) %>%
+ ggbarplot("month", "noofsamples",fill = "label",
+    color = "label", palette ="my_palette") + facet_wrap(~ hgvs_p_gisaid,scales = "free") +
+   theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+### NTD variants - GISAID
+
+```{r c14,echo=TRUE,eval=TRUE,message=FALSE,warning=FALSE,fig.align='center',fig.height=10,fig.width=12}
+
+merge_sample_obs %>% filter(sample_id %in% c(common_samples$sample_id)) %>% 
+  select(date_gisaid,hgvs_p_gisaid,gene_name_gisaid) %>% 
+  filter(gene_name_gisaid %in% "S") %>% 
+  mutate(month=str_extract(date_gisaid,"(\\d{4}\\-\\d{2})"), aa_pos = as.numeric(str_extract(hgvs_p_gisaid,"\\d+")), hgvs_p_gisaid = str_remove(hgvs_p_gisaid,"p."))   %>% 
+  filter(aa_pos >= 14 & aa_pos <= 313) %>%
+  group_by(hgvs_p_gisaid,month) %>% 
+  summarise(noofsamples=n()) %>% 
+  tidyr::drop_na() %>%
+  arrange(month)  %>% 
+  left_join(.,lineage_json_df,c("hgvs_p_gisaid"="snps")) %>%
+  filter(!is.na(label)) %>%
+ ggbarplot("month", "noofsamples",fill = "label",
+    color = "label", palette ="my_palette") + facet_wrap(~ hgvs_p_gisaid,scales = "free") +
+   theme(axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1))
+
+```
+
+## Conclusions
+
+-   Set of 11,374 samples from COG-UK, are standard dataset for validation of variant calls from CoVigator
+-   Majority of variants are called commonly between ENA and GISAID datasets, however deletions are high in GISAID genome assemblies.
+-   Variant types SNVs and deletions are observed to be high in orf1ab and S genes. Large deletions are observed in non-coding regions primarily >29000 nucleotide regions of the genomes.
+-   Variant calls from GISAID are validated by ENA VAF and depth making them good quality calls.
+-   Temporal distribution shows samples in ENA are post-dated as they were submitted after GISAID assemblies. Hence, GISAID samples are true dated and further exploration can be performed by GISAID variant calls.
+-   Temporal distribution of RBD and NTD domain known variants show emergence of delta variants in recent months.
+-   This set of variants from COG-UK samples would be a choice to create a model to predict emergence of variants (SNVs and Deletions).
+
+```{r}
+sessionInfo()
+```
