@@ -12,6 +12,7 @@ services:
             - ${PWD}:/home/jovyan/work
             - /scratch/info/projects/covigator/data/db_dump_latest:/data
             - /scratch/info/projects/covigator/references:/references
+            - /scratch/info/projects/covigator/data/ena_20220217:/scratch/info/projects/covigator/data/ena_20220217
         ports:
             - ${PORT}:8888
         container_name: covigator-analysis

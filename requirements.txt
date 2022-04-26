@@ -6,3 +6,4 @@ ipywidgets>=7.6
 jupyterlab-git==0.36.0
 matplotlib_venn==0.11.7
 UpSetPlot==0.6.0
+pdbio==0.4.2
