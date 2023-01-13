@@ -7,3 +7,6 @@ jupyterlab-git==0.36.0
 matplotlib_venn==0.11.7
 UpSetPlot==0.6.0
 pdbio==0.4.2
+matplotlib==3.3.4
+seaborn==0.11.1
+wordcloud==1.8.2.2
