@@ -1,7 +1,9 @@
 biopython==1.78
 xmltodict==0.12.0
-jupyterlab==2.2.9
 pybiomart==0.2.0
-plotly==4.14.3
-matplotlib==3.3.4
-seaborn==0.11.1
+plotly>=5
+ipywidgets>=7.6
+jupyterlab-git==0.36.0
+matplotlib_venn==0.11.7
+UpSetPlot==0.6.0
+pdbio==0.4.2

@@ -1,0 +1,18 @@
+version: "3.3"
+services:
+    jupyter-server:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        environment:
+            - JUPYTER_TOKEN=covigator
+            - NB_UID=$USER_ID
+            - NB_GID=$USER_GROUP
+        volumes:
+            - ${PWD}:/home/jovyan/work
+            - /scratch/info/projects/covigator/data/db_dump_latest:/data
+            - /scratch/info/projects/covigator/references:/references
+            - /scratch/info/projects/covigator/data/ena_20220217:/scratch/info/projects/covigator/data/ena_20220217
+        ports:
+            - ${PORT}:8888
+        container_name: covigator-analysis

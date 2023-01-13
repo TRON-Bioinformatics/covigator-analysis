@@ -1,0 +1,62 @@
+cluster	hgvs_p	variant_id	position	A.23.1	AV.1	AY.4	AY.4.2	B.1.1.318	B.1.1.529	B.1.1.7	B.1.351	B.1.427	B.1.429	B.1.525	B.1.526	B.1.617.1	B.1.617.2	B.1.617.3	B.1.621	BA.1	BA.2	BA.3	C.37	P.1	P.2	P.3
+0	p.L5F	21575:C>T	21575												True											
+0	p.N148T	22005:A>C	22005																							
+0	p.L176F	22088:C>T	22088																							
+0	p.D253G	22320:A>G	22320												True											
+0	p.D574Y	23282:G>T	23282																							
+1	p.T19R	21618:C>G	21618			True	True										True	True								
+1	p.E156_R158delinsG	22028:GAGTTCA>G	22028																							
+1	p.L452R	22917:T>G	22917			True	True					True	True			True	True	True								
+1	p.T478K	22995:C>A	22995			True	True		True								True			True	True	True				
+1	p.P681R	23604:C>G	23604	True		True	True									True	True	True								
+1	p.D950N	24410:G>A	24410			True	True										True	True	True							
+2	p.T19I	21618:C>T	21618																		True					
+2	p.L24_A27delinsS	21632:TTACCCCCTG>T	21632																							
+2	p.V213G	22200:T>G	22200																							
+2	p.S371F	22674:C>T	22674																		True	True				
+2	p.T376A	22688:A>G	22688																		True					
+2	p.D405N	22775:G>A	22775																		True	True				
+2	p.R408S	22786:A>C	22786																		True					
+3	p.T20N	21621:C>A	21621																					True		
+3	p.P26S	21638:C>T	21638																					True		
+3	p.D88E	21826:T>G	21826																							
+3	p.D138Y	21974:G>T	21974																							
+3	p.R190S	22132:G>T	22132																							
+3	p.K417T	22812:A>C	22812																					True		
+3	p.E484K	23012:G>A	23012		True			True			True			True	True				True					True	True	True
+3	p.T1027I	24642:C>T	24642																					True		
+3	p.V1176F	25088:G>T	25088																							True
+4	p.A67V	21762:C>T	21762																	True		True				
+4	p.G496S	23048:G>A	23048																	True						
+4	p.T547K	23202:C>A	23202																	True						
+4	p.N856K	24130:C>A	24130																	True						
+4	p.L981F	24503:C>T	24503																	True						
+5	p.E484A	23013:A>C	23013						True											True	True	True				
+5	p.Q493R	23040:A>G	23040						True											True	True	True				
+5	p.Q498R	23055:A>G	23055						True											True	True	True				
+5	p.Y505H	23075:T>C	23075						True											True	True	True				
+5	p.N679K	23599:T>G	23599						True											True	True	True				
+5	p.D796Y	23948:G>T	23948						True											True	True	True				
+5	p.Q954H	24424:A>T	24424						True											True	True	True				
+5	p.N969K	24469:T>A	24469						True											True	True	True				
+6	p.N211_L212delinsI	22193:AATT>A	22193																							
+6	p.R346K	22599:G>A	22599																True							
+6	p.K417N	22813:G>T	22813						True											True	True	True				
+6	p.N440K	22882:T>G	22882						True											True	True	True				
+6	p.G446S	22898:G>A	22898																	True		True				
+7	p.G75V	21786:G>T	21786																				True			
+7	p.T76I	21789:C>T	21789																				True			
+7	p.L452Q	22917:T>A	22917																				True			
+7	p.F490S	23031:T>C	23031																				True			
+7	p.T859N	24138:C>A	24138																				True			
+8	p.S98F	21855:C>T	21855																							
+8	p.D138H	21974:G>C	21974																							
+8	p.T208S	22184:A>T	22184																							
+8	p.S221L	22224:C>T	22224																							
+8	p.D228H	22244:G>C	22244																							
+8	p.V1228L	25244:G>T	25244																							
+9	p.Y144del	21990:TTTA>T	21990																							
+9	p.A570D	23271:C>A	23271							True																
+9	p.T716I	23709:C>T	23709							True																
+9	p.S982A	24506:T>G	24506							True																
+9	p.D1118H	24914:G>C	24914							True																
