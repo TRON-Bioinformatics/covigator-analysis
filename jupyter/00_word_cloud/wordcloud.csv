@@ -1,4 +1,3 @@
-country_alpha_3,count
 CHE,52870
 ESP,31020
 USA,25910
@@ -50,7 +49,6 @@ JOR,1
 SRB,1
 MEX,1
 HKG,1
-pangolin_lineage,count
 B.1.1.7,17519
 B.1,8904
 B.1.1,8838
@@ -151,7 +149,6 @@ AY.39,134
 BE.3,133
 AY.120,133
 B.1.177.7,131
-concat,count
 ORF1ab:p.L4715L,123533
 ORF1ab:p.F924F,122583
 S:p.D614G,122123
